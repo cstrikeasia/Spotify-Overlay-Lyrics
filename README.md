@@ -27,7 +27,8 @@ Developed using **Python + PySide6**, it provides a transparent desktop overlay 
 <img width="1919" height="1031" alt="image" src="https://github.com/user-attachments/assets/bf2270e2-59fa-42bd-96d0-a7369e1c8dec" />
 
 ## CPU and Memory Usage
-<img width="709" height="93" alt="image" src="https://github.com/user-attachments/assets/4ad49534-42bd-44f9-ab71-341dd6954a0b" />
+<img width="659" height="90" alt="image" src="https://github.com/user-attachments/assets/2a709b0d-2e5e-46b8-b801-83a27b81bb4a" />
+
 
 
 
