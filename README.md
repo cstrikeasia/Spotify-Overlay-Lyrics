@@ -13,21 +13,14 @@ Developed using **Python + PySide6**, it provides a transparent desktop overlay 
 **No Spotify API, Client ID, OAuth, or Premium subscription required.**
 
 ## Web Version Screenshot
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/ef4ac4e4-af08-46e7-8010-4ea8d2d84d99" />
-
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/b55b2d1e-3eb0-4006-ac90-d16ad51c8797" />
 
 ## Desktop App Screenshot
-<img width="1919" height="943" alt="image" src="https://github.com/user-attachments/assets/226d4227-58bc-4f90-9101-6cd68c02a93f" />
-<img width="1919" height="943" alt="image" src="https://github.com/user-attachments/assets/27188456-739c-4bf3-80fb-ef5df4bc0edd" />
-
+<img width="1919" height="945" alt="image" src="https://github.com/user-attachments/assets/e9b5d2e2-5eff-42df-aefe-9635c6466076" />
+<img width="1919" height="943" alt="image" src="https://github.com/user-attachments/assets/83a78550-d69e-4030-9c95-e99f52b2de12" />
 
 ## Desktop Overlay Window
-<img width="421" height="209" alt="image" src="https://github.com/user-attachments/assets/ae7402e4-572d-4bf5-a531-74756787ed51" />
-
-## Full-Screen Game Overlay Window
-<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/07e428dd-f7c6-48b7-a2bc-fb5bb1c544b7" />
-
-
+<img width="884" height="501" alt="image" src="https://github.com/user-attachments/assets/3737715b-ef7c-48ca-8912-13efcb1ec940" />
 
 ## Features
 
