@@ -1,6 +1,6 @@
 {
   "name": "spotify-overlay-lyrics",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Spotify Overlay Lyrics",
   "scripts": { "build": "node build.mjs" },

@@ -24,7 +24,7 @@ def setup_logging() -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         handlers=[RotatingFileHandler(folder / "application.log", maxBytes=1_000_000, backupCount=2, encoding="utf-8")],
     )
-    LOG.info("Starting Spotify Overlay Lyrics v0.0.1 / Python %s / %s", sys.version.split()[0], platform.platform())
+    LOG.info("Starting Spotify Overlay Lyrics v0.0.2 / Python %s / %s", sys.version.split()[0], platform.platform())
 
 
 def report_exception(error_type: type[BaseException], error: BaseException, tb: object) -> None:

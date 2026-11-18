@@ -22,6 +22,8 @@ from PySide6.QtWidgets import (
 )
 
 from .animated_lyrics import AnimatedLyricsView
+from .dynamic_island import DynamicIslandWindow
+from .lyric_script import display_lyrics
 from .toolbar_icons import VectorToolButton
 from .artwork import Artwork, verified_artwork_bytes
 from .i18n import LANGUAGES, current_language, set_language, tr
@@ -485,7 +487,11 @@ class SettingsDialog(QDialog):
         self.setWindowTitle(tr("設定 · Spotify Lyrics"))
         flags = (Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint
                  | Qt.WindowType.WindowSystemMenuHint)
-        if current.topmost or bool(parent.windowFlags() & Qt.WindowType.WindowStaysOnTopHint):
+        # Keep the settings dialog usable in front of the always-on-top island,
+        # without hiding or disabling the island's visual presentation.
+        island = getattr(parent, 'island', None)
+        if (current.topmost or bool(parent.windowFlags() & Qt.WindowType.WindowStaysOnTopHint)
+                or (island is not None and island.isVisible())):
             flags |= Qt.WindowType.WindowStaysOnTopHint
         self.setWindowFlags(flags)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
@@ -769,6 +775,21 @@ class SettingsDialog(QDialog):
         group.addLayout(self._field_row(tr("同步歌詞行數"), self.lines, tr("純文字模式固定只顯示目前一句")))
         layout.addWidget(card)
 
+        card, group = self._card(tr("歌詞文字"), tr("與介面語言獨立；不會修改下載的原始 LRC 或同步時間。"))
+        self.lyrics_script = QComboBox()
+        self.lyrics_script.setObjectName("lyricsScript")
+        self.lyrics_script.addItem(tr("自動（依歌曲名稱判斷）"), "auto")
+        self.lyrics_script.addItem(tr("強制繁體中文"), "traditional")
+        self.lyrics_script.addItem(tr("強制簡體中文"), "simplified")
+        self.lyrics_script.addItem(tr("保留來源原文"), "original")
+        self.lyrics_script.setMinimumWidth(195)
+        index = self.lyrics_script.findData(current.lyrics_script)
+        self.lyrics_script.setCurrentIndex(max(0, index))
+        group.addLayout(self._field_row(
+            tr("歌詞繁簡設定"), self.lyrics_script,
+            tr("所有歌詞視窗、靈動島與 OBS 同步套用；切換不必重新搜尋。")))
+        layout.addWidget(card)
+
         card, group = self._card(
             tr("浮動歌詞顯示效果"), tr("只影響浮動歌詞；完整應用模式固定不使用動畫。"))
         self.overlay_effect = QComboBox()
@@ -881,6 +902,27 @@ class SettingsDialog(QDialog):
         group.addWidget(self.start_with_windows)
         layout.addWidget(card)
 
+        card, group = self._card(tr("桌面靈動島"), tr("在螢幕頂端顯示迷你播放器，不影響原本的浮動歌詞與 OBS。"))
+        self.dynamic_island = SpotifySwitch(tr("啟用桌面靈動島"))
+        self.dynamic_island.setChecked(current.dynamic_island_enabled)
+        group.addWidget(self.dynamic_island)
+        self.island_hover = SpotifySwitch(tr("滑鼠移入時自動展開"))
+        self.island_hover.setChecked(current.dynamic_island_auto_expand)
+        group.addWidget(self.island_hover)
+        self.island_lyrics = SpotifySwitch(tr("在靈動島顯示同步歌詞"))
+        self.island_lyrics.setChecked(current.dynamic_island_show_lyrics)
+        group.addWidget(self.island_lyrics)
+        # These options apply only when the island has been explicitly enabled.
+        # Keep their saved values while disabled so re-enabling restores them.
+        for option in (self.island_hover, self.island_lyrics):
+            option.setEnabled(current.dynamic_island_enabled)
+            self.dynamic_island.toggled.connect(option.setEnabled)
+        island_hint = QLabel(tr("固定於主螢幕頂端中央，不可拖曳。收合時顯示封面、歌手 - 歌名與當前歌詞；點擊展開，右鍵可進入設定或關閉。"))
+        island_hint.setObjectName("settingsFieldHint")
+        island_hint.setWordWrap(True)
+        group.addWidget(island_hint)
+        layout.addWidget(card)
+
         card, group = self._card(tr("語言"), tr("預設跟隨作業系統，修改後立即套用"))
         self.language = QComboBox()
         for code, name in LANGUAGES:
@@ -946,6 +988,7 @@ class SettingsDialog(QDialog):
         self.values.font_size = self.font.value()
         self.values.adaptive_lyrics_background = self.adaptive_background.isChecked()
         self.values.language = str(self.language.currentData())
+        self.values.lyrics_script = str(self.lyrics_script.currentData())
         self.values.desktop_text_color = self._selected_color
         self.values.desktop_cover_enabled = self.desktop_cover.isChecked()
         self.values.obs_cover_enabled = self.obs_cover.isChecked()
@@ -959,6 +1002,9 @@ class SettingsDialog(QDialog):
         self.values.topmost = self.topmost.isChecked()
         self.values.game_overlay_enabled = self.game_overlay.isChecked()
         self.values.start_with_windows = self.start_with_windows.isChecked()
+        self.values.dynamic_island_enabled = self.dynamic_island.isChecked()
+        self.values.dynamic_island_auto_expand = self.island_hover.isChecked()
+        self.values.dynamic_island_show_lyrics = self.island_lyrics.isChecked()
         self.values.obs_browser_enabled = self.obs_browser.isChecked()
         self.values.obs_browser_port = self.obs_port.value()
         self.values.obs_window_capture = self.obs_window.isChecked()
@@ -981,9 +1027,14 @@ class LyricsWindow(QWidget):
         self.monitor: MediaMonitor | None = None
         self.playback: Playback | None = None
         self.lyrics = LyricsResult(kind="missing")
+        self._raw_lyrics = self.lyrics  # keep source unchanged for instant language toggles
         self.current_index: int | None = None
         # Overlay mode shows no loading text while searching lyrics.
         self._lyrics_search_pending = False
+        # A genuinely missing or temporarily unavailable lyric may appear
+        # later in another public catalogue. Retry with a bounded schedule.
+        self._lyrics_retry_generation = 0
+        self._lyrics_auto_retry_attempts = 0
         # Game overlay is always reversible from the tray. Do not start in
         # click-through mode on systems with no tray, where it could be stuck.
         if self.settings.game_overlay_enabled and not QSystemTrayIcon.isSystemTrayAvailable():
@@ -1041,6 +1092,7 @@ class LyricsWindow(QWidget):
         self.setStyleSheet(STYLE)
         self._build_interface()
         self._create_tray()
+        self._create_island()
         self._configure_obs_server()
         self._apply_display_mode()
         self._apply_line_styles()
@@ -1430,6 +1482,39 @@ class LyricsWindow(QWidget):
         self.card_layout.invalidate()
         self.outer_layout.invalidate()
 
+    def _create_island(self) -> None:
+        """Create one persistent media capsule; it shares the existing monitor."""
+        self.island = DynamicIslandWindow(
+            auto_expand=self.settings.dynamic_island_auto_expand,
+            show_lyrics=self.settings.dynamic_island_show_lyrics,
+            demo=self.demo,
+        )
+        self.island.transport_requested.connect(self._request_transport)
+        self.island.seek_requested.connect(self._request_island_seek)
+        self.island.show_main_requested.connect(self._bring_back)
+        self.island.settings_requested.connect(self._open_settings)
+        self.island.disable_requested.connect(lambda: self._toggle_island(False))
+        if self.settings.dynamic_island_enabled:
+            self.island.show()
+
+    def _toggle_island(self, enabled: bool) -> None:
+        self.settings.dynamic_island_enabled = bool(enabled)
+        self._apply_island_settings()
+        self._persist()
+
+    def _apply_island_settings(self) -> None:
+        self.island.configure(
+            auto_expand=self.settings.dynamic_island_auto_expand,
+            show_lyrics=self.settings.dynamic_island_show_lyrics,
+        )
+        if self.settings.dynamic_island_enabled:
+            self.island.show()
+        else:
+            self.island.hide()
+            self.island.set_expanded(False, pin=False)
+        if self.tray is not None:
+            self.action_island.setChecked(self.settings.dynamic_island_enabled)
+
     def _create_tray(self) -> None:
         self.tray: QSystemTrayIcon | None = None
         if not QSystemTrayIcon.isSystemTrayAvailable():
@@ -1442,6 +1527,11 @@ class LyricsWindow(QWidget):
         self.action_show = QAction(tr("顯示懸浮歌詞"), self)
         self.action_show.triggered.connect(self._bring_back)
         menu.addAction(self.action_show)
+        self.action_island = QAction(tr("啟用桌面靈動島"), self)
+        self.action_island.setCheckable(True)
+        self.action_island.setChecked(self.settings.dynamic_island_enabled)
+        self.action_island.triggered.connect(self._toggle_island)
+        menu.addAction(self.action_island)
         self.action_text = QAction(tr("純文字模式（無背景）"), self)
         self.action_text.setCheckable(True)
         self.action_text.setChecked(self.settings.desktop_text_only)
@@ -1803,6 +1893,21 @@ class LyricsWindow(QWidget):
         self._pending_seek_started = time.monotonic()
         self._tick(force=True)
 
+    def _request_island_seek(self, target_ms: int) -> None:
+        """Use the same queued WinRT seek and anti-snapback as the main bar."""
+        item = self.playback
+        if item is None or item.duration_ms <= 0 or self.monitor is None:
+            return
+        target_ms = max(0, min(int(target_ms), item.duration_ms))
+        if not self.monitor.submit_seek(target_ms):
+            QMessageBox.warning(self, tr("控制失敗"), tr("找不到正在執行的 Spotify 播放工作階段。"))
+            return
+        self._seeking = False
+        self._pending_seek_ms = target_ms
+        self._pending_seek_track = item.key
+        self._pending_seek_started = time.monotonic()
+        self._tick(force=True)
+
     def _request_transport(self, command: str) -> None:
         if self.monitor is None or self.playback is None:
             return
@@ -1835,6 +1940,10 @@ class LyricsWindow(QWidget):
         if self.demo or self._closing:
             return
         if item is None:
+            if self.playback is not None:
+                self._lyrics_retry_generation += 1
+                self._lyrics_auto_retry_attempts = 0
+            self.island.set_playback(None)
             self._lyrics_search_pending = False
             self._seeking = False
             self._pending_seek_ms = None
@@ -1842,6 +1951,7 @@ class LyricsWindow(QWidget):
                 self.playback = None
                 self._update_cover(None)
                 self.lyrics = LyricsResult(kind="missing")
+                self._raw_lyrics = self.lyrics
                 self.current_index = None
                 self.lyric_view.set_lyrics(())
                 self._message(tr("沒有偵測到 Spotify 桌面版的播放工作階段"))
@@ -1854,7 +1964,10 @@ class LyricsWindow(QWidget):
         is_new = self.playback is None or self.playback.key != item.key
         if is_new:
             self._pending_seek_ms = None
+            self._lyrics_retry_generation += 1
+            self._lyrics_auto_retry_attempts = 0
         self.playback = item
+        self.island.set_playback(item)
         self._update_cover(item)
         self.track_label.setText(item.title)
         self.track_label.setToolTip(item.title)
@@ -1864,6 +1977,7 @@ class LyricsWindow(QWidget):
         if is_new:
             self._lyrics_search_pending = True
             self.lyrics = LyricsResult(kind="missing")
+            self._raw_lyrics = self.lyrics
             self.current_index = None
             self.lyric_view.set_lyrics(())
             self._message(tr("正在搜尋這首歌的歌詞…"))
@@ -1884,19 +1998,55 @@ class LyricsWindow(QWidget):
         if self.service.has_synced_local(self.playback) and not result.source.startswith("本機"):
             return  # Only a timed local override can supersede an online lookup.
         self._lyrics_search_pending = False
-        self.lyrics = result
+        self._raw_lyrics = result
+        self.lyrics = display_lyrics(
+            result, self.playback, mode=self.settings.lyrics_script,
+            ui_language=current_language())
         self.current_index = None
-        if result.is_synced:
-            self.lyric_view.set_lyrics(result.lines)
+        # Make decisions from the *visible* result, not the raw provider
+        # response: some synced files consist entirely of credits/notices.
+        if self.lyrics.is_synced:
+            self.lyric_view.set_lyrics(self.lyrics.lines)
             self.stack.setCurrentIndex(0)
             self._tick(force=True)
-        elif result.kind in {"missing", "plain"}:
+        elif self.lyrics.kind in {"missing", "plain"}:
             # Older provider results may still carry static text; never show it.
             # The center of the window should contain only the short message.
             # No editing instructions or manual-sync controls appear here.
             self._message(tr(NO_LYRICS_MESSAGE))
         else:
             self._message(tr(result.message) if result.message else tr("歌詞查詢失敗，請稍後重試"))
+        if not self.lyrics.is_synced and self.lyrics.kind in {"missing", "plain", "error"}:
+            self._schedule_missing_lyrics_retry(key)
+
+    def _update_lyrics_script(self) -> None:
+        """Re-render cached raw lyrics for all consumers without a refetch."""
+        self.lyrics = display_lyrics(
+            self._raw_lyrics, self.playback, mode=self.settings.lyrics_script,
+            ui_language=current_language())
+        self.current_index = None
+        self.lyric_view.set_lyrics(self.lyrics.lines if self.lyrics.is_synced else ())
+        self._tick(force=True)
+
+    def _schedule_missing_lyrics_retry(self, track_key: str) -> None:
+        """Bound retries (25s, 90s) to the current song and lookup generation."""
+        if self.demo or self._closing or self._lyrics_auto_retry_attempts >= 2:
+            return
+        generation = self._lyrics_retry_generation
+        delay = (25_000, 90_000)[self._lyrics_auto_retry_attempts]
+        QTimer.singleShot(delay, lambda: self._retry_missing_lyrics(track_key, generation))
+
+    def _retry_missing_lyrics(self, track_key: str, generation: int) -> None:
+        if (self.demo or self._closing or generation != self._lyrics_retry_generation or
+                self.playback is None or self.playback.key != track_key or
+                self._lyrics_search_pending or self.lyrics.is_synced or
+                self.service.has_synced_local(self.playback)):
+            return
+        self._lyrics_auto_retry_attempts += 1
+        self._lyrics_search_pending = True
+        LOG.info("Retrying unavailable lyrics (%d/2) for %r / %r",
+                 self._lyrics_auto_retry_attempts, self.playback.title, self.playback.artist)
+        self._start_lyrics_lookup(self.playback, force=True)
 
     def _got_error(self, message: str) -> None:
         self._source_error = message
@@ -1920,6 +2070,8 @@ class LyricsWindow(QWidget):
     def _tick(self, *, force: bool = False) -> None:
         playback = self.playback
         if playback is None:
+            self.island.set_timeline(0, 0)
+            self.island.set_lyrics(self.lyrics, 0, self.settings.offset_ms)
             if not self._seeking:
                 self.progress.setValue(0)
             self.elapsed.setText("0:00")
@@ -1931,6 +2083,8 @@ class LyricsWindow(QWidget):
             # Background media polls must not move the knob under the cursor.
             self.elapsed.setText(self._format_time(self._seek_preview_ms))
             self.total.setText(self._format_time(playback.duration_ms) if playback.duration_ms else "--:--")
+            self.island.set_timeline(self._seek_preview_ms, playback.duration_ms)
+            self.island.set_lyrics(self.lyrics, self._seek_preview_ms, self.settings.offset_ms)
             self._publish_obs_state()
             return
         if self._pending_seek_ms is not None:
@@ -1947,6 +2101,8 @@ class LyricsWindow(QWidget):
         self.elapsed.setText(self._format_time(pos))
         self.total.setText(self._format_time(playback.duration_ms) if playback.duration_ms else "--:--")
         self.progress.setValue(int(pos / playback.duration_ms * 1000) if playback.duration_ms else 0)
+        self.island.set_timeline(pos, playback.duration_ms)
+        self.island.set_lyrics(self.lyrics, pos, self.settings.offset_ms)
         if not self.lyrics.is_synced:
             self._publish_obs_state()
             return
@@ -2000,9 +2156,12 @@ class LyricsWindow(QWidget):
         if self.service.has_synced_local(self.playback):
             QMessageBox.information(self, tr("歌詞"), tr("目前使用已儲存的本機 LRC 歌詞"))
             return
+        self._lyrics_retry_generation += 1
+        self._lyrics_auto_retry_attempts = 0
         self.service.clear_cache(self.playback)
         self._lyrics_search_pending = True
         self.lyrics = LyricsResult(kind="missing")
+        self._raw_lyrics = self.lyrics
         self.current_index = None
         self.lyric_view.set_lyrics(())
         self._message(tr("重新搜尋多來源同步歌詞中…"))
@@ -2062,6 +2221,8 @@ class LyricsWindow(QWidget):
             self._toggle_click_through(False)
         if not self.isVisible():
             self._bring_back()
+        # Keep the island visible throughout the modal dialog. The settings
+        # dialog itself is promoted above the island when necessary.
         # SettingsDialog copies the current settings. Include any drag/resize
         # still waiting for the debounce timer before taking that snapshot.
         self._geometry_save_timer.stop()
@@ -2097,6 +2258,7 @@ class LyricsWindow(QWidget):
                 new.start_with_windows = old.start_with_windows
                 QMessageBox.warning(self, tr("無法設定開機啟動"), str(exc))
         self.settings = new
+        self._apply_island_settings()
         self.click_through = bool(new.game_overlay_enabled)
         if new.game_overlay_enabled:
             self._game_zorder_timer.start()
@@ -2105,6 +2267,7 @@ class LyricsWindow(QWidget):
         locale_changed = new.language != old.language
         if locale_changed:
             set_language(new.language)
+            self.island.retranslate()
             self._retranslate_main()
         self._apply_display_mode(previous_mode=old.desktop_text_only)
         self._apply_line_styles()
@@ -2120,6 +2283,8 @@ class LyricsWindow(QWidget):
         if (new.obs_browser_enabled != old.obs_browser_enabled
                 or new.obs_browser_port != old.obs_browser_port):
             self._configure_obs_server()
+        if new.lyrics_script != old.lyrics_script or locale_changed:
+            self._update_lyrics_script()
         self._tick(force=True)
         self._persist()
         if self._obs_error and new.obs_browser_enabled:
@@ -2293,6 +2458,9 @@ class LyricsWindow(QWidget):
         else:
             self.raise_()
             self.activateWindow()
+        if self.settings.dynamic_island_enabled and self.island.isVisible():
+            # The main window can also be topmost. Keep its mini player above it.
+            self.island.raise_()
 
     def _persist(self) -> None:
         if getattr(self, "_geometry_ready", False) and not self._geometry_transition:
@@ -2306,6 +2474,7 @@ class LyricsWindow(QWidget):
         self._geometry_save_timer.stop()
         self._game_zorder_timer.stop()
         self._persist()
+        self.island.hide()
         self._closing = True
         if self.monitor:
             self.monitor.stop()
@@ -2333,9 +2502,12 @@ class LyricsWindow(QWidget):
         fake = Playback(
             title="浮動歌詞 · 展示模式", artist="Spotify Overlay Lyrics",
             album="UI Preview", duration_ms=30000, position_ms=0, is_playing=True,
+            cover_path=str(Path(__file__).resolve().parent.parent /
+                           "assets" / "island_demo_cover.png"),
             observed_monotonic=time.monotonic(),
         )
         self.playback = fake
+        self.island.set_playback(fake)
         self.track_label.setText(fake.title)
         self.artist_label.setText(fake.artist)
         self._got_lyric(fake.key, LyricsResult(kind="synced", lines=lines, source="範例資料"))
@@ -2349,4 +2521,6 @@ def launch(*, demo: bool = False) -> int:
     app.setWindowIcon(app_icon())
     window = LyricsWindow(demo=demo)
     window.show()
+    if window.settings.dynamic_island_enabled:
+        window.island.raise_()
     return app.exec()

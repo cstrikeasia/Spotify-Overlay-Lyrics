@@ -25,6 +25,7 @@ class Settings:
     desktop_text_only: bool = False
     game_overlay_enabled: bool = False  # frameless, no-activate, click-through overlay
     language: str = "system"  # System locale unless explicitly overridden
+    lyrics_script: str = "auto"  # auto / traditional / simplified / original
     adaptive_lyrics_background: bool = True
     desktop_text_color: str = "#F7FFF9"
     desktop_cover_enabled: bool = True
@@ -36,6 +37,13 @@ class Settings:
     transition_ms: int = 620
     topmost: bool = True
     start_with_windows: bool = False
+    dynamic_island_enabled: bool = False  # opt-in; enable from Settings > System
+    dynamic_island_auto_expand: bool = True
+    dynamic_island_show_lyrics: bool = True
+    # Kept solely to load old settings without losing unrelated preferences.
+    # Fixed-position island intentionally never reads or writes these coordinates.
+    dynamic_island_x: int = -1
+    dynamic_island_y: int = -1
     obs_browser_enabled: bool = True
     obs_browser_port: int = 38571
     obs_window_capture: bool = False
@@ -65,6 +73,8 @@ class Settings:
         self.adaptive_lyrics_background = bool(self.adaptive_lyrics_background)
         if self.language not in {"system", "zh_TW", "zh_CN", "en", "ja", "ko"}:
             self.language = "system"
+        if self.lyrics_script not in {"auto", "traditional", "simplified", "original"}:
+            self.lyrics_script = "auto"
         self.desktop_cover_enabled = bool(self.desktop_cover_enabled)
         self.obs_cover_enabled = bool(self.obs_cover_enabled)
         color = str(self.desktop_text_color).strip()
@@ -77,6 +87,11 @@ class Settings:
         # Responsive player layout handles sizes below the old 430x390 floor.
         self.width = max(325, min(1400, int(self.width)))
         self.height = max(265, min(1000, int(self.height)))
+        self.dynamic_island_enabled = bool(self.dynamic_island_enabled)
+        self.dynamic_island_auto_expand = bool(self.dynamic_island_auto_expand)
+        self.dynamic_island_show_lyrics = bool(self.dynamic_island_show_lyrics)
+        self.dynamic_island_x = int(self.dynamic_island_x)
+        self.dynamic_island_y = int(self.dynamic_island_y)
         self.obs_browser_enabled = bool(self.obs_browser_enabled)
         self.obs_window_capture = bool(self.obs_window_capture)
         self.obs_browser_port = max(1024, min(65535, int(self.obs_browser_port)))

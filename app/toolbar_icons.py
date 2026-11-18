@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QToolButton
 class VectorToolButton(QToolButton):
     """Paint a consistent 20 px outline icon over the native styled button."""
 
-    ICONS = frozenset(("type", "refresh-cw", "settings", "minus", "x", "skip-back", "skip-forward", "play", "pause"))
+    ICONS = frozenset(("type", "refresh-cw", "settings", "minus", "x", "skip-back", "skip-forward", "play", "pause", "airplay-audio"))
 
     def __init__(self, icon_name: str, tooltip: str, *, width: int = 34) -> None:
         super().__init__()
@@ -32,8 +32,17 @@ class VectorToolButton(QToolButton):
     def paintEvent(self, event) -> None:
         # Let Qt draw the button's background, hover and keyboard focus state.
         super().paintEvent(event)
-        if self.property("variant") == "transport":
-            # High-contrast black controls on Spotify-style solid white disc.
+        variant = str(self.property("variant") or "")
+        if variant == "iosPrimary":
+            color = QColor("#F4F4F6" if self.isEnabled() else "#8E8E93")
+        elif variant in {"iosSecondary", "iosRoute"}:
+            if not self.isEnabled():
+                color = QColor("#67676D")
+            elif self.underMouse():
+                color = QColor("#FFFFFF")
+            else:
+                color = QColor("#F2F2F6" if variant == "iosSecondary" else "#A8A8AF")
+        elif self.property("variant") == "transport":
             color = QColor("#111111" if self.isEnabled() else "#BBBBBB")
         elif not self.isEnabled():
             color = QColor("#626262")
@@ -46,7 +55,7 @@ class VectorToolButton(QToolButton):
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        icon_px = 20.0
+        icon_px = float(self.property("glyphSize") or 20.0)
         painter.translate((self.width() - icon_px) / 2.0,
                           (self.height() - icon_px) / 2.0)
         painter.scale(icon_px / 24.0, icon_px / 24.0)
@@ -113,20 +122,32 @@ class VectorToolButton(QToolButton):
             painter.drawLine(QPointF(18.0, 6.0), QPointF(6.0, 18.0))
 
         elif self.icon_name in {"skip-back", "skip-forward"}:
+            painter.setBrush(painter.pen().color())
+            painter.setPen(Qt.PenStyle.NoPen)
             if self.icon_name == "skip-back":
-                painter.drawLine(QPointF(5, 5), QPointF(5, 19))
-                path = QPainterPath()
-                path.moveTo(18, 5)
-                path.lineTo(7.5, 12)
-                path.lineTo(18, 19)
+                a = QPainterPath()
+                a.moveTo(17.4, 5.1)
+                a.lineTo(10.9, 12.0)
+                a.lineTo(17.4, 18.9)
+                a.closeSubpath()
+                b = QPainterPath()
+                b.moveTo(11.0, 5.1)
+                b.lineTo(4.5, 12.0)
+                b.lineTo(11.0, 18.9)
+                b.closeSubpath()
             else:
-                painter.drawLine(QPointF(19, 5), QPointF(19, 19))
-                path = QPainterPath()
-                path.moveTo(6, 5)
-                path.lineTo(16.5, 12)
-                path.lineTo(6, 19)
-            path.closeSubpath()
-            painter.drawPath(path)
+                a = QPainterPath()
+                a.moveTo(6.6, 5.1)
+                a.lineTo(13.1, 12.0)
+                a.lineTo(6.6, 18.9)
+                a.closeSubpath()
+                b = QPainterPath()
+                b.moveTo(13.0, 5.1)
+                b.lineTo(19.5, 12.0)
+                b.lineTo(13.0, 18.9)
+                b.closeSubpath()
+            painter.drawPath(a)
+            painter.drawPath(b)
 
         elif self.icon_name == "play":
             path = QPainterPath()
@@ -143,3 +164,23 @@ class VectorToolButton(QToolButton):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(QRectF(7, 5, 3.3, 14), 0.9, 0.9)
             painter.drawRoundedRect(QRectF(13.7, 5, 3.3, 14), 0.9, 0.9)
+
+        elif self.icon_name == "airplay-audio":
+            color = painter.pen().color()
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            pen = QPen(color)
+            pen.setWidthF(1.9)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(pen)
+            painter.drawArc(QRectF(4.5, 5.0, 15.0, 15.0), 25 * 16, 130 * 16)
+            painter.drawArc(QRectF(7.8, 8.2, 8.4, 8.4), 32 * 16, 116 * 16)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(color)
+            tri = QPainterPath()
+            tri.moveTo(12.0, 16.0)
+            tri.lineTo(16.8, 21.0)
+            tri.lineTo(7.2, 21.0)
+            tri.closeSubpath()
+            painter.drawPath(tri)
+

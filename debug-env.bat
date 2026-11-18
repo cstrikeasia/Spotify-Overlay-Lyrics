@@ -2,7 +2,7 @@
 setlocal EnableExtensions
 chcp 65001 >nul
 cd /d "%~dp0"
-echo Spotify Overlay Lyrics - Windows launcher v0.0.1
+echo Spotify Overlay Lyrics - Windows launcher v0.0.2
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\launcher.ps1" -Mode Diagnose
 set "APP_EXIT=%ERRORLEVEL%"
 echo.

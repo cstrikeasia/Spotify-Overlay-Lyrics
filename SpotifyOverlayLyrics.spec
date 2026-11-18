@@ -1,15 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_data_files
 from PyInstaller.utils.hooks import collect_submodules
 
+datas = [('frontend/dist', 'frontend/dist'), ('assets/spotify_mark.png', 'assets'), ('assets/spotify_mark.svg', 'assets')]
 hiddenimports = []
+datas += collect_data_files('opencc')
 hiddenimports += collect_submodules('winrt')
+hiddenimports += collect_submodules('pycaw')
 
 
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('frontend/dist', 'frontend/dist'), ('assets/spotify_mark.png', 'assets'), ('assets/spotify_mark.svg', 'assets')],
+    datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

@@ -1,6 +1,6 @@
 ﻿#requires -version 5.1
 <#
-Spotify Overlay Lyrics Windows launcher v0.0.1.
+Spotify Overlay Lyrics Windows launcher v0.0.2.
 Windows PowerShell 5.1 treats redirected native stderr as errors when
 $ErrorActionPreference='Stop'. Run Python/pip under a scoped Continue policy,
 retain ALL stdout/stderr in setup.log, and inspect the real process exit code.
@@ -253,9 +253,9 @@ function Ensure-Environment {
     }
 
     Ensure-Pip
-    $imports = 'from PySide6.QtWidgets import QApplication; import requests; import winrt.windows.media.control; import winrt.windows.storage.streams; import unidecode'
+    $imports = 'from PySide6.QtWidgets import QApplication; import requests; import winrt.windows.media.control; import winrt.windows.storage.streams; import unidecode; from opencc import OpenCC; import comtypes; from pycaw.pycaw import AudioUtilities, IAudioMeterInformation, IAudioSessionControl2'
     if (-not (Test-Native -Command $venvPython -Arguments @('-c', $imports))) {
-        Write-Stage '第一次啟動：安裝 UI、Spotify 媒體讀取與歌詞套件...'
+        Write-Stage '安裝或修復必要套件...'
         Invoke-Native -Command $venvPython -Arguments @('-m', 'pip', 'install',
             '--disable-pip-version-check', '-r', (Join-Path $projectRoot 'requirements.txt')) -Stage 'install dependencies'
         if (-not (Test-Native -Command $venvPython -Arguments @('-c', $imports))) {
@@ -296,7 +296,7 @@ function Assert-FrontendReady {
 }
 
 function Show-Diagnostics {
-    Write-Host '=== Spotify Overlay Lyrics v0.0.1 - 診斷 ==='
+    Write-Host '=== Spotify Overlay Lyrics v0.0.2 - 診斷 ==='
     Write-Host ('Windows: ' + [Environment]::OSVersion.VersionString)
     Write-Host ('64-bit OS: ' + [Environment]::Is64BitOperatingSystem)
     Write-Host ('PowerShell: ' + $PSVersionTable.PSVersion.ToString())
@@ -346,7 +346,7 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $projectRoot 'main.py'))) {
         throw '找不到 main.py：請先將 ZIP 全部解壓縮，不要在 ZIP 預覽畫面直接雙擊 BAT。'
     }
-    Write-Host ('Spotify Overlay Lyrics v0.0.1 | Mode: ' + $Mode)
+    Write-Host ('Spotify Overlay Lyrics v0.0.2 | Mode: ' + $Mode)
     Write-Host ('Project: ' + $projectRoot)
     Write-Host ''
     if ($Mode -eq 'Diagnose') {
@@ -367,6 +367,8 @@ try {
             '-m', 'PyInstaller', '--noconfirm', '--clean', '--onefile', '--windowed',
             '--name', 'SpotifyOverlayLyrics', '--icon', 'assets\app.ico',
             '--collect-submodules', 'winrt',
+            '--collect-submodules', 'pycaw',
+            '--collect-data', 'opencc',
             '--add-data', 'frontend\dist;frontend\dist',
             '--add-data', 'assets\spotify_mark.png;assets',
             '--add-data', 'assets\spotify_mark.svg;assets', 'main.py'
