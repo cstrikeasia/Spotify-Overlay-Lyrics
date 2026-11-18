@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spotify Overlay Lyrics</title>
+  <link rel="stylesheet" href="/assets/overlay-css-2d514d08b76f.css">
+  <script src="/assets/vue3-60ef9454b717.js" defer></script>
+  <script src="/assets/overlay-js-a6192ba3fb59.js" defer></script>
+</head>
+<body class="m-0 h-full w-full overflow-hidden bg-transparent text-white">
+  <div id="app" class="h-full w-full" v-cloak>
+    <main id="overlay" class="fixed top-1/2 left-1/2 flex flex-col items-center justify-center px-5 py-[13px] text-center"
+          :class="{'lyrics-ready': ui.lyricsReady, 'has-song': ui.hasSong, 'no-motion': !ui.mixEffects}"
+          aria-label="Spotify 同步歌詞">
+      <header id="track" v-show="ui.trackVisible" class="relative mb-[10px] w-full max-w-[480px] shrink-0"
+              :class="{'with-cover': ui.coverVisible}">
+        <div id="cover-slot" v-show="ui.coverVisible" class="absolute top-0 overflow-hidden"
+             :class="{'no-mix': !ui.mixEffects}">
+          <img id="cover" class="cover-image absolute inset-0 block h-full w-full object-cover" alt="專輯封面">
+          <img id="cover-next" class="cover-image absolute inset-0 block h-full w-full object-cover" alt="換歌封面">
+        </div>
+        <div id="hero-title" v-show="ui.trackInfoVisible && !ui.lyricsReady" :aria-hidden="ui.lyricsReady">{{ ui.title }}</div>
+        <div id="hero-artist" v-show="ui.trackInfoVisible && !ui.lyricsReady && ui.artist" :aria-hidden="ui.lyricsReady">{{ ui.artist }}</div>
+        <div id="track-info" v-show="ui.trackInfoVisible" :aria-hidden="!ui.lyricsReady">
+          <div id="title" class="overflow-hidden text-ellipsis whitespace-nowrap text-[18px] font-[750]">{{ ui.title }}</div>
+          <div id="artist" class="mt-[3px] overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-medium">{{ ui.artist }}</div>
+        </div>
+      </header>
+      <div id="idle-status" v-show="!ui.hasSong && ui.showMessage" class="mb-3 text-center">{{ ui.message }}</div>
+      <section id="playback-progress" v-show="ui.progressEnabled" class="flex h-[26px] shrink-0 items-center gap-[11px]"
+               :class="{'playing': ui.playing}" aria-label="Spotify 播放進度">
+        <span id="progress-elapsed" class="progress-time">{{ ui.elapsed }}</span>
+        <div id="progress-rail" class="relative h-1 min-w-0 flex-1 rounded-full" role="progressbar"
+             aria-label="歌曲播放進度" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="ui.progressPercent">
+          <div id="progress-fill" class="absolute inset-0 rounded-[inherit]"></div>
+        </div>
+        <span id="progress-total" class="progress-time">{{ ui.total }}</span>
+      </section>
+      <section id="viewport" class="relative isolate w-full min-h-0 overflow-hidden" aria-live="off"
+               :aria-hidden="!ui.lyricsReady">
+        <div id="message" v-show="ui.showMessage && !ui.hasSong" class="absolute top-1/2 left-0 w-full -translate-y-1/2 whitespace-pre-wrap">{{ ui.message }}</div>
+        <div id="lyric-outgoing" class="pointer-events-none absolute top-1/2 left-0 z-[4] w-full whitespace-pre-wrap" aria-hidden="true"></div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
