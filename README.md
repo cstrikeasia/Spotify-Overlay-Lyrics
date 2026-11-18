@@ -22,12 +22,12 @@ Developed using **Python + PySide6**, it provides a transparent desktop overlay 
 ## Desktop Overlay Window
 <img width="884" height="501" alt="image" src="https://github.com/user-attachments/assets/3737715b-ef7c-48ca-8912-13efcb1ec940" />
 
-## CPU and Memory Usage
-<img width="709" height="93" alt="image" src="https://github.com/user-attachments/assets/4ad49534-42bd-44f9-ab71-341dd6954a0b" />
-
 ## Dynamic Island Screenshot
 <img width="1919" height="1031" alt="image" src="https://github.com/user-attachments/assets/6739d234-16c2-446a-8af9-c17c2247cd51" />
 <img width="1919" height="1031" alt="image" src="https://github.com/user-attachments/assets/bf2270e2-59fa-42bd-96d0-a7369e1c8dec" />
+
+## CPU and Memory Usage
+<img width="709" height="93" alt="image" src="https://github.com/user-attachments/assets/4ad49534-42bd-44f9-ab71-341dd6954a0b" />
 
 
 
