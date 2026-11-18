@@ -71,15 +71,3 @@ Built with Vue 3, Tailwind CSS 4, and the Web Animations API to provide smooth t
 This is an independent third-party project and is not affiliated with Spotify or any lyrics provider.
 
 Translated with DeepL.com (free version)
-
-## v0.0.1 — OBS offline startup fix
-
-The complete ZIP now includes `frontend/dist/index.html` and the compiled Vue, CSS,
-and JavaScript assets. **Node.js/npm is not needed to launch the application.**
-The desktop window will keep running even if the optional OBS assets are missing;
-the OBS Browser Source is disabled and the reason is written to the application log.
-The Windows EXE build checks all required assets before packaging.
-
-To use the fixed project, extract **all files** from the ZIP (not just the BAT
-file) into a new folder and start `start.bat` on Windows. Existing preferences
-in `%LOCALAPPDATA%\SpotifyOverlayLyrics` are not deleted.
